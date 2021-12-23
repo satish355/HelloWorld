@@ -1,0 +1,138 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "mysql.fullname" . }}-router
+  labels:
+    app: {{ include "mysql.fullname" . }}-router
+spec:
+  serviceName: {{ include "mysql.fullname" . }}-router
+  podManagementPolicy: "Parallel"
+  replicas: {{ .Values.replicaCount }}
+  selector:
+   matchLabels:
+    app: {{ include "mysql.fullname" . }}-router
+  template:
+    metadata:
+      labels:
+        app: {{ include "mysql.fullname" . }}-router
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                    - {{ include "mysql.fullname" . }}-router
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: router
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        env:
+        - name: MYSQL_INNODB_CLUSTER_MEMBERS
+          value: "{{ .Values.initmysql.innodbClusterMembers }}"
+        - name: MYSQL_CREATE_ROUTER_USER
+          value: "{{ .Values.initmysql.createRouterUser }}"
+        - name: MYSQL_HOST
+          value: "{{ .Values.initmysql.host }}"
+        - name: MYSQL_PORT
+          value: "{{ .Values.initmysql.port }}"
+        - name: MYSQL_USER
+          value: "{{ .Values.initmysql.user }}"
+        - name: MYSQL_API_USER
+          value: "{{ .Values.initmysql.routerapiuser }}"
+        - name: MYSQL_CLUSTER_HOST1
+          value: "{{ .Values.initmysql.clusterhost1 }}"
+        - name: MYSQL_CLUSTER_HOST2
+          value: "{{ .Values.initmysql.clusterhost2 }}"
+        - name: MYSQL_CLUSTER_HOST3
+          value: "{{ .Values.initmysql.clusterhost3 }}"
+        - name: MYSQL_PASSWORD
+          valueFrom:
+              secretKeyRef:
+                name: {{ include "mysql.fullname" . }}-mysql-clusteradmin-secret
+                key: ADMIN_PASSWORD
+        - name: MYSQL_API_PASSWORD
+          valueFrom:
+              secretKeyRef:
+                name: {{ include "mysql.fullname" . }}-mysql-routerapi-secret
+                key: API_ADMIN_PASSWORD
+        ports:
+        - name: mysqlrw
+          containerPort: {{ .Values.routercontainer.port }}
+        - name: mysqlro
+          containerPort: {{ .Values.routercontainer.roport }}
+        - name: mysqlapi
+          containerPort: {{ .Values.routercontainer.apiport }}
+        readinessProbe:
+          exec:
+            command:
+              - cat
+              - /mysql-router-init-complete
+          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+        resources:
+          requests:            
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        volumeMounts:
+          - name: routerpasswd-configmap
+            mountPath: /home/router_passwd.sh
+            subPath: router_passwd.sh
+          - name: router-extraconfig-configmap
+            mountPath: /tmp/mysqlrouter/router-extraconfig.conf
+            subPath: router-extraconfig.conf
+          - name: routerpasswd-auth-configmap
+            mountPath: /etc/mysqlrouter/mysqlrouter.pwd
+            subPath: mysqlrouter.pwd
+          - name: run-sh-configmap
+            mountPath: /run.sh
+            subPath: run.sh
+          - name: healthcheck-sh-configmap
+            mountPath: /healthcheck.sh
+            subPath: healthcheck.sh
+          - name: healthcheck-cnf-secret
+            mountPath: /healthcheck.cnf
+            subPath: healthcheck.cnf
+          - name: server-cert-configmap
+            mountPath: /tmp/mysqlrouter/server-cert.pem
+            subPath: server-cert.pem
+          - name: server-key-configmap
+            mountPath: /tmp/mysqlrouter/server-key.pem
+            subPath: server-key.pem
+      volumes:
+      - name: routerpasswd-auth-configmap
+        configMap:
+          name: {{ include "mysql.fullname" . }}-routerapipasswd-auth-configmap
+          defaultMode: 0755
+      - name: routerpasswd-configmap
+        configMap:
+          name: {{ include "mysql.fullname" . }}-routerapipasswd-configmap
+          defaultMode: 0755     
+      - name: router-extraconfig-configmap
+        configMap:
+          name: {{ include "mysql.fullname" . }}-extraconfig-configmap
+      - name: run-sh-configmap
+        configMap:
+          name: {{ include "mysql.fullname" . }}-run-sh-configmap
+          defaultMode: 0755
+      - name: healthcheck-sh-configmap
+        configMap:
+          name: {{ include "mysql.fullname" . }}-healthcheck-sh-configmap
+          defaultMode: 0755
+      - name: healthcheck-cnf-secret
+        secret:
+          secretName: {{ include "mysql.fullname" . }}-healthcheck-cnf-secret
+      - name: server-cert-configmap
+        configMap:
+          name: {{ include "mysql.fullname" . }}-server-cert-configmap
+          defaultMode: 0755
+      - name: server-key-configmap
+        configMap:
+          name: {{ include "mysql.fullname" . }}-server-key-configmap
+          defaultMode: 0755

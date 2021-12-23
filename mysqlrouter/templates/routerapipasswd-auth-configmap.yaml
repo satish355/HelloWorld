@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql.fullname" . }}-routerapipasswd-auth-configmap
+  labels:
+    app: {{ include "mysql.fullname" . }}-router
+data:
+  mysqlrouter.pwd: |
+    mysqlrouterrest:$5$IAad9Qau9anHmMYi$WxGghZTnB7aL5rgZLO..C2qj9MM1iwzEjxHe4WJ9/43

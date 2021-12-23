@@ -1,0 +1,117 @@
+
+# Default values for mysql_ms.
+# This is a YAML-formatted file.
+
+replicaCount: 3
+
+image:
+  repository: "klstg-docker.slb-wartifactory-v.stg.rmn.local/innoeye/oss/mysql_cluster/mysql-server"
+  pullPolicy: IfNotPresent
+  tag: "8.0.26_1.0"
+
+mysqldExporter:
+  repository: 'klstg-docker.slb-wartifactory-v.stg.rmn.local/innoeye/oss/mysql_cluster/mysqld-exporter'
+  pullPolicy: IfNotPresent
+  tag: "v0.13.0" # Overrides the image tag whose default is the chart appVersion.
+  port: 9104
+  resources:
+    limits:
+      cpu: 500m
+      memory: 500Mi
+    requests:
+      cpu: 250m
+      memory: 250Mi
+  service:
+    type: NodePort
+    port: 9104
+    #nodeport: 32022
+
+initimage:
+  repository: "klstg-docker.slb-wartifactory-v.stg.rmn.local/innoeye/oss/mysql_cluster/bash"
+  pullPolicy: IfNotPresent
+  tag: "5.1.8"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# mysql ports
+mysqlport:
+  port: 1122
+  mysqlx: 11220
+  mysqladmin: 11221 
+
+# sepecify persistent volumes for mysql data directory 
+storageClass:
+  localStorageEnabled: false
+  name: robin
+  storage: 100Gi
+
+# if localStorageEnabled is true, provide below details and uncomment them
+mysqlstaticpv: 
+#  node0host: dev-aforesedge101zc.dev.rmn.local
+#  node0hostpath: /data/mysql/mysqlnode1
+#  node1host: dev-aforesedge102zc.dev.rmn.local
+#  node1hostpath: /data/mysql/mysqlnode2
+#  node2host: dev-aforesauth101zc.dev.rmn.local 
+#  node2hostpath: /data/mysql/mysqlnode3
+
+resources:
+  limits:
+    cpu: 24
+    memory: 36Gi
+  requests:
+    cpu: 8
+    memory: 12Gi
+
+innodbConfig:
+  innodbBufferPoolSize: 6Gi
+  innodbBufferPoolInstances: 6
+  innodbReadIOThreads: 4
+  innodbWriteIOThreads: 4
+  innodbTempDataFilePathSize: 10G
+  serverIdOffset: 100
+  expireLogsDays: 7
+  maxConnections: 2100
+  maxUserConnections: 200
+  slaveParallelWorkers: 10
+
+innodbCluster:
+  multiPrimaryMode: false
+  IPWhiteList: 2000::/3
+  automateInnodbClusterCreation: true
+  timezone: /usr/share/zoneinfo/Asia/Tokyo
+
+hostAlias:
+  hostname: kls28-tn-ie-ros-aus
+  IP: "240b:c0e0:102:55d8:b482:2::"
+
+pmmConfig:
+  infraK8sClustername: kls15
+  serverIP: [240b:c0e0:101:54d1:2001:1:0:104] 
+  serverPort: 8089 
+
+readinessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 10
+livenessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 10
+
+#service:
+#  type: ClusterIP
+#  port: 80
+
+#autoscaling:
+#  enabled: false
+#  minReplicas: 1
+#  maxReplicas: 100
+#  targetCPUUtilizationPercentage: 80
+# targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+

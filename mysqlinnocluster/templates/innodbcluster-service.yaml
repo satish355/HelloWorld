@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mysql.fullname" . }}-inno-cluster
+  labels:
+    app: {{ include "mysql.fullname" . }}-inno-cluster
+spec:
+  selector:
+    app: {{ include "mysql.fullname" . }}-inno-cluster
+  type: NodePort
+  ports:
+  - name: mysql
+    port: {{ .Values.mysqlport.port }}
+   # nodePort: 30022
+    protocol: TCP
+  - name: mysqlx
+    port: {{ .Values.mysqlport.mysqlx }}
+   # nodePort: 30020
+    protocol: TCP
+  - name: mysqladmin
+    port: {{ .Values.mysqlport.mysqladmin }}
+   # nodePort: 30021
+    protocol: TCP
+  - name: mysqld-exporter-port
+    port: {{ .Values.mysqldExporter.service.port }}
+   # nodePort: 30021
+    protocol: TCP

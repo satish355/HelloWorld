@@ -1,0 +1,51 @@
+# Default values for mysql_ms.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 2
+
+image:
+  repository: klstg-docker.slb-wartifactory-v.stg.rmn.local/innoeye/oss/nv36282/mysql-router
+  pullPolicy: IfNotPresent
+  tag: "8.0.26"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# destination mysql innodb cluster credentials
+initmysql:
+  host: keycloak-db-mysqlinnocluster-node-0
+  port: 1122
+  user: clusteradmin
+  routerapiuser: mysqlrouterrest
+  clusterhost1: keycloak-db-mysqlinnocluster-node-0
+  clusterhost2: keycloak-db-mysqlinnocluster-node-1
+  clusterhost3: keycloak-db-mysqlinnocluster-node-2
+  innodbClusterMembers: 1
+  createRouterUser: 0
+
+
+# mysql router bindings
+routercontainer:
+  port: 6446
+  roport: 6447
+  apiport: 8443
+
+resources:
+  requests:
+    cpu: 1
+    memory: 500Mi
+
+readinessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 10
+livenessProbe:
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

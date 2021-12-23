@@ -1,0 +1,74 @@
+{{- if .Values.storageClass.localStorageEnabled -}}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "mysql.fullname" . }}-{{ include "mysql.fullname" . }}-0
+spec:
+   accessModes:
+     - ReadWriteOnce
+   capacity:
+    storage: {{ .Values.storageClass.storage }}
+   volumeMode: Filesystem # Mount volume into Pod as a directory.
+   hostPath:
+     path: {{ .Values.mysqlstaticpv.node0hostpath }}
+   persistentVolumeReclaimPolicy: Retain
+   storageClassName: {{ .Values.storageClass.name }}
+   nodeAffinity: # required when using local volumes.
+     required:
+       nodeSelectorTerms:
+       - matchExpressions:
+         - key: kubernetes.io/hostname
+           operator: In
+           values:
+           - {{ .Values.mysqlstaticpv.node0host }}
+
+---
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "mysql.fullname" . }}-{{ include "mysql.fullname" . }}-1
+spec:
+   accessModes:
+     - ReadWriteOnce
+   capacity:
+    storage: {{ .Values.storageClass.storage }}
+   volumeMode: Filesystem # Mount volume into Pod as a directory.
+   hostPath:
+     path: {{ .Values.mysqlstaticpv.node1hostpath }}
+   persistentVolumeReclaimPolicy: Retain
+   storageClassName: {{ .Values.storageClass.name }}
+   nodeAffinity: # required when using local volumes.
+     required:
+       nodeSelectorTerms:
+       - matchExpressions:
+         - key: kubernetes.io/hostname
+           operator: In
+           values:
+           - {{ .Values.mysqlstaticpv.node1host }}
+
+---
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "mysql.fullname" . }}-{{ include "mysql.fullname" . }}-2
+spec:
+   accessModes:
+     - ReadWriteOnce
+   capacity:
+    storage: {{ .Values.storageClass.storage }}
+   volumeMode: Filesystem # Mount volume into Pod as a directory.
+   hostPath:
+     path: {{ .Values.mysqlstaticpv.node2hostpath }}
+   persistentVolumeReclaimPolicy: Retain
+   storageClassName: {{ .Values.storageClass.name }}
+   nodeAffinity: # required when using local volumes.
+     required:
+       nodeSelectorTerms:
+       - matchExpressions:
+         - key: kubernetes.io/hostname
+           operator: In
+           values:
+           - {{ .Values.mysqlstaticpv.node2host }}
+{{- end }}

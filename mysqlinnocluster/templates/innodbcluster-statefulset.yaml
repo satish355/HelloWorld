@@ -1,0 +1,220 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "mysql.fullname" . }}-node
+spec:
+  selector:
+    matchLabels:
+      app: {{ include "mysql.fullname" . }}-inno-cluster
+  serviceName: {{ include "mysql.fullname" . }}-inno-cluster
+  updateStrategy:
+    type: OnDelete
+  replicas: {{ .Values.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "mysql.fullname" . }}-inno-cluster
+      annotations:
+        sidecar.istio.io/inject: "false"
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9104"
+    spec:
+      hostAliases:
+      - hostnames:
+        - "{{ .Values.hostAlias.hostname }}"
+        ip: "{{ .Values.hostAlias.IP }}"
+      terminationGracePeriodSeconds: 1800
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - {{ include "mysql.fullname" . }}-inno-cluster
+            topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: init-mysql
+          image: "{{ .Values.initimage.repository }}:{{ .Values.initimage.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: SERVER_ID_OFFSET
+            value: "{{ .Values.innodbConfig.serverIdOffset }}"
+          command:
+          - bash
+          - "-c"
+          - |
+            set -ex
+            
+            # Generate mysql server-id from pod ordinal index.
+            [[ $HOSTNAME =~ -([0-9]+)$ ]] || exit 1
+            
+            ordinal=${BASH_REMATCH[1]}
+            
+            echo [mysqld] > /mnt/server.cnf
+        
+            # Add an offset to avoid reserved server-id=0 value.
+            echo server-id=$(($SERVER_ID_OFFSET + $ordinal))    >> /mnt/server.cnf
+            echo "report_host='$HOSTNAME'"         >> /mnt/server.cnf
+            cp /mnt/server.cnf /mnt/conf.d/
+        
+            # debug
+            echo 'Below is the content of genereted mysql cnf file:'
+            cat /mnt/server.cnf 
+          volumeMounts: 
+          - name: server-conf
+            mountPath: /mnt/conf.d
+      containers:
+        - name: {{ include "mysql.name" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: MYSQL_SHUT_PASSWORD
+            valueFrom:
+                secretKeyRef:
+                  name: {{ include "mysql.fullname" . }}-mysql-rootuser-secret
+                  key: SHUT_ROOT_PASSWORD
+          - name: MYSQL_SHUT_USER
+            valueFrom:
+                secretKeyRef:
+                  name: {{ include "mysql.fullname" . }}-mysql-rootuser-secret
+                  key: SHUT_USER
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+                secretKeyRef:
+                  name: {{ include "mysql.fullname" . }}-mysql-rootuser-secret
+                  key: ROOT_PASSWORD
+          - name: INNODB_CLUSTER_PASSWORD
+            valueFrom:
+                secretKeyRef:
+                  name: {{ include "mysql.fullname" . }}-mysql-rootuser-secret
+                  key: INNODB_PASSWORD
+          - name: INNODB_CLUSTER_USER
+            valueFrom:
+                secretKeyRef:
+                  name: {{ include "mysql.fullname" . }}-mysql-rootuser-secret
+                  key: INNODB_USER
+          - name: MULTI_PRIMARY_MODE
+            value: "{{ .Values.innodbCluster.multiPrimaryMode }}"                  
+          - name: GR_IP_WHITELIST
+            value: "{{ .Values.innodbCluster.IPWhiteList }}"
+          - name: AUTOMATE_INNODB_CLUSTER_CREATION
+            value: "{{ .Values.innodbCluster.automateInnodbClusterCreation }}"
+          - name: INFRA_K8s_CLUSTERNAME
+            value: "{{ .Values.pmmConfig.infraK8sClustername }}"
+          ports:
+          - name: mysql
+            containerPort: {{ .Values.mysqlport.port }}
+          - name: mysqlx
+            containerPort: {{ .Values.mysqlport.mysqlx }}
+          - name: mysqladmin
+            containerPort: {{ .Values.mysqlport.mysqladmin }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                - bash
+                - /pre-destroy-secret.sh
+          resources:
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+          volumeMounts:
+            - name: {{ include "mysql.fullname" . }}
+              mountPath: /mysql_datadir
+            - name: server-conf
+              mountPath: /mysql_temp_init_files/server.cnf
+              subPath: server.cnf
+            - name: common-cnf-configmap
+              mountPath: /mysql_temp_init_files/common.cnf
+              subPath: common.cnf
+            - name: 0-init-user-secret
+              mountPath: /mysql_temp_init_files/0-init-user.sql
+              subPath: 0-init-user.sql
+            - name: init-innodb-cluster-sh-secret
+              mountPath: /mnt/init-innodb-cluster.sh
+              subPath: init-innodb-cluster.sh
+            - name: mysql-pem-secrets
+              mountPath: /mysql-pem-files
+            - name: 1-init-sqldump-pemfiles-sh-configmap
+              mountPath: /docker-entrypoint-initdb.d/1-init-sqldump-pemfiles-sh-configmap.sh
+              subPath: 1-init-sqldump-pemfiles-sh-configmap.sh
+            - name: mysql-sqldump-configmap
+              mountPath: /mysql_sqldump
+            - name: pre-destroy-secret
+              mountPath: /pre-destroy-secret.sh
+              subPath: pre-destroy-secret.sh
+            - name: entrypoint-sh-configmap
+              mountPath: /entrypoint.sh
+              subPath: entrypoint.sh
+            - name: tz-tokyo
+              mountPath: /etc/localtime
+            - name: pmm-setup-config
+              mountPath: /mnt/pmm_setup.sh
+              subPath: pmm_setup.sh
+        - name: mysqld-exporter
+          image: "{{ .Values.mysqldExporter.repository }}:{{ .Values.mysqldExporter.tag | default .Chart.AppVersion }}"
+          env:
+          - name: DATA_SOURCE_NAME
+            value: "prometheous_exporter:Promexport123@(localhost:1122)/"
+          resources:
+            limits:
+              memory: {{ .Values.mysqldExporter.resources.limits.memory }}
+              cpu: {{ .Values.mysqldExporter.resources.limits.cpu }}
+            requests: 
+              memory: {{ .Values.mysqldExporter.resources.requests.memory }}
+              cpu: {{ .Values.mysqldExporter.resources.requests.cpu }}
+          ports:
+          - containerPort: {{ .Values.mysqldExporter.service.port }}
+      volumes:
+      - name: server-conf
+        emptyDir: {}
+      - name: common-cnf-configmap
+        configMap:
+          name: {{ include "mysql.fullname" . }}-common-cnf-configmap
+      - name: 0-init-user-secret
+        secret:
+          secretName: {{ include "mysql.fullname" . }}-0-init-user-secret
+      - name: init-innodb-cluster-sh-secret
+        secret:
+          secretName: {{ include "mysql.fullname" . }}-init-innodb-cluster-sh-secret
+      - name: mysql-pem-secrets
+        secret:
+          secretName: {{ include "mysql.fullname" . }}-mysql-pem-secrets
+      - name: 1-init-sqldump-pemfiles-sh-configmap
+        configMap:
+          name: {{ include "mysql.fullname" . }}-1-init-sqldump-pemfiles-sh-configmap
+      - name: mysql-sqldump-configmap
+        configMap:
+          name: {{ include "mysql.fullname" . }}-mysql-sqldump-configmap
+      - name: pre-destroy-secret
+        secret:
+          secretName: {{ include "mysql.fullname" . }}-pre-destroy-secret 
+      - name: entrypoint-sh-configmap
+        configMap:
+          name: {{ include "mysql.fullname" . }}-entrypoint-sh-configmap
+          defaultMode: 0755
+      - name: tz-tokyo
+        hostPath:
+          path: "{{ .Values.innodbCluster.timezone }}"
+      - name: pmm-setup-config
+        configMap:
+          name: {{ include "mysql.fullname" . }}-pmm-setup-configmap
+          defaultMode: 0755
+  volumeClaimTemplates:
+  - metadata:
+      name: {{ include "mysql.fullname" . }}
+      annotations:
+        robin.io/encryption: AES256
+        robin.io/replication: "2"
+        robin.io/faultdomain: host
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: {{ .Values.storageClass.name }}
+      resources:
+        requests:
+          storage: {{ .Values.storageClass.storage }}
