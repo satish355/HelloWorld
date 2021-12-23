@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ include "mysql.fullname" . }}-routerapipasswd-configmap
-  labels:
-    app: {{ include "mysql.fullname" . }}-router
-data:
-  router_passwd.sh: |
-    mysqlrouter_passwd set /etc/mysqlrouter/mysqlrouter.pwd $MYSQL_API_USER

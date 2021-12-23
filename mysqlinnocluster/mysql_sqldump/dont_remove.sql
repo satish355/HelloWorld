@@ -1,1 +1,0 @@
-select 'executing sql scripts';
